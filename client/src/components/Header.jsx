@@ -4,6 +4,8 @@ import { Link, NavLink } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { signoutSuccess } from "../redux/user/userSlice";
 import { useTheme } from "./ThemeContext";
+import Logo from "../../../images/logo1.png";
+import LogoDark from "../../../images/logo1dark.png";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -46,9 +48,9 @@ export default function Navbar() {
             className="font-bold text-sm sm:text-xl flex items-center flex-shrink-0"
           >
             <img
-              src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Flag_of_the_Red_Cross.svg/1200px-Flag_of_the_Red_Cross.svg.png"
+              src={theme === 'dark' ? LogoDark : Logo}
               alt="logo"
-              className="h-8"
+              className="h-18"
             />
             <span
               className="px-2 py-1 bg-gradient-to-r from-emerald-400 to-cyan-400
