@@ -15,10 +15,15 @@ import { PiPoliceCarFill } from "react-icons/pi";
 import { MdFireTruck } from "react-icons/md";
 import { LuAmbulance } from "react-icons/lu";
 
+import Logo from "../../../images/logo1.png";
+import LogoDark from "../../../images/logo1dark.png";
+import { useTheme } from "./ThemeContext";
+
 export default function DashSideBar() {
   const [isHovered, setIsHovered] = useState(false);
   const DashSideBarWidth = isHovered ? "w-64" : "w-16";
   const { currentUser } = useSelector((state) => state.user);
+  const { theme } = useTheme(); 
 
   let userRole = "";
 
@@ -42,7 +47,7 @@ export default function DashSideBar() {
 
   return (
     <div
-     className={`hidden md:flex flex-col bg-white  transition-all duration-300 ease-in-out ${DashSideBarWidth} min-h-screen`}
+     className={`hidden md:flex flex-col bg-white dark:bg-zinc-800 transition-all duration-300 ease-in-out ${DashSideBarWidth} min-h-screen`}
 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -51,7 +56,7 @@ export default function DashSideBar() {
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
           <img
-            src="https://upload.wikimedia.org/wikipedia/commons/1/1a/Flag_of_the_Red_Cross.svg"
+            src={theme === "dark" ? LogoDark : Logo}
             alt="Logo"
             className="h-6 w-6"
           />
@@ -60,7 +65,7 @@ export default function DashSideBar() {
       </div>
 
       {isHovered && (
-        <div className="flex items-center gap-3 px-4 py-2  rounded-md text-sm font-medium text-gray-700">
+        <div className="flex items-center gap-3 px-4 py-2  rounded-md text-sm font-medium text-gray-700 dark:text-gray-300">
           <span>{userRole}</span>
         </div>
       )}
@@ -68,7 +73,7 @@ export default function DashSideBar() {
       {/* Navigation */}
       <div className="mt-6">
         {isHovered && (
-          <p className="px-4 text-xs text-gray-500 mb-1">NAVIGATION</p>
+          <p className="px-4 text-xs text-gray-500 dark:text-gray-300 mb-1">NAVIGATION</p>
         )}
         <ul className="space-y-1">
           {currentUser.isAdmin ? (
@@ -76,7 +81,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=home"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <HomeIcon className="w-5 h-5" />
                   {isHovered && <span>Dashboard</span>}
@@ -88,7 +93,7 @@ export default function DashSideBar() {
           <li>
             <Link
               to="/dashboard?tab=profile"
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
             >
               <CgProfile className="w-5 h-5" />
               {isHovered && <span>Profile</span>}
@@ -109,7 +114,7 @@ export default function DashSideBar() {
                     ? "drive"
                     : ""
                 }`}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
               >
                 <IoMdDocument className="w-5 h-5" />
                 {isHovered && <span>Documents</span>}
@@ -121,7 +126,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=users"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <FaUsers className="w-5 h-5" />
                   {isHovered && <span>Users</span>}
@@ -134,7 +139,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=hospital"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <LuHospital className="w-5 h-5" />
                   {isHovered && <span>Hospital</span>}
@@ -147,7 +152,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=policeDep"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <MdLocalPolice className="w-5 h-5" />
                   {isHovered && <span>Police Department</span>}
@@ -160,7 +165,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=blood"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <MdBloodtype className="w-5 h-5" />
                   {isHovered && <span>Blood Banks</span>}
@@ -173,7 +178,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=fire"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <FaHouseFire className="w-5 h-5" />
                   {isHovered && <span>Fire Department</span>}
@@ -186,7 +191,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=ambulance"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <LuAmbulance className="w-5 h-5" />
                   {isHovered && <span>Ambulance</span>}
@@ -199,7 +204,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=poilcevec"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <PiPoliceCarFill className="w-5 h-5" />
                   {isHovered && <span>Police Vechicle</span>}
@@ -212,7 +217,7 @@ export default function DashSideBar() {
               <li>
                 <Link
                   to="/dashboard?tab=firetruck"
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300"
                 >
                   <MdFireTruck className="w-5 h-5" />
                   {isHovered && <span>Fire Truck</span>}

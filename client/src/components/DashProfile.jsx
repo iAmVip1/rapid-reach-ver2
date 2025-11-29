@@ -170,8 +170,8 @@ export default function DashProfile() {
   
 
   return (
-    <div className="max-w-xl mx-auto bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-6">
+    <div className="max-w-xl mx-auto bg-white dark:bg-zinc-700 p-6 rounded-lg shadow-md">
+      <h2 className="text-2xl font-semibold  mb-6">
         Personal Information
       </h2>
 
@@ -192,7 +192,7 @@ export default function DashProfile() {
           />
 
           <div>
-            <h3 className="text-lg font-bold text-gray-700">
+            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300">
               {currentUser.username}
             </h3>
             <div className="mt-2 flex gap-2">
@@ -234,7 +234,7 @@ export default function DashProfile() {
 
         <div className="space-y-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-600">
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">
               Name
             </label>
             <input
@@ -247,7 +247,7 @@ export default function DashProfile() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600">
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">
               Email
             </label>
             <input
@@ -260,7 +260,7 @@ export default function DashProfile() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-600">
+            <label className="block text-sm font-medium text-gray-600 dark:text-gray-300">
               Password
             </label>
             <input

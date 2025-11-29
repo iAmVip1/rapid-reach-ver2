@@ -47,7 +47,7 @@ export default function Signin() {
   }
   
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-cyan-50 to-teal-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-cyan-50 to-teal-50 dark:bg-gradient-to-br dark:from-[#0f172a] dark:via-[#0a1e2e] dark:to-[#0f172a] flex items-center justify-center p-4">
       {/* Background Decorative Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-emerald-400 to-cyan-400 rounded-full opacity-10 blur-3xl"></div>
