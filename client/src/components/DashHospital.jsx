@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { FaPhone, FaTrash, FaEye, FaEdit, FaUser, FaEnvelope, FaBuilding, FaCircle, FaSearch, FaFilter, FaHospital, FaMapMarkerAlt, FaCalendar, FaCheck, FaTimes } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import Socket from '../socket/SocketContext';
+import { useCall } from '../socket/CallContext';
+import UnapprovedPostModal from './UnapprovedPostModal';
 
 export default function DashHospital() {
   const { currentUser } = useSelector((state) => state.user);
+  const { startCall } = useCall() || {};
   const [hospitalPosts, setHospitalPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [postToAction, setPostToAction] = useState(null);
+  const hasJoined = useRef(false);
 
   // Fetch hospital posts (include unapproved for admin review)
   useEffect(() => {
@@ -40,60 +49,78 @@ export default function DashHospital() {
     fetchHospitalPosts();
   }, []);
 
-  // Mock online users for demo (replace with real socket implementation)
+  // Subscribe to socket events for online status
   useEffect(() => {
-    // Simulate online users - replace with actual socket implementation
-    const mockOnlineUsers = hospitalPosts.slice(0, 2).map(post => post.userRef);
-    setOnlineUsers(mockOnlineUsers);
-  }, [hospitalPosts]);
+    const socket = Socket.getSocket();
+
+    if (currentUser && socket && !hasJoined.current) {
+      socket.emit('join', { id: currentUser._id, name: currentUser.username });
+      hasJoined.current = true;
+    }
+
+    const handleOnlineUsers = (list) => {
+      setOnlineUsers(Array.isArray(list) ? list : []);
+    };
+
+    if (socket) {
+      socket.on('online-users', handleOnlineUsers);
+      return () => {
+        socket.off('online-users', handleOnlineUsers);
+      };
+    }
+  }, [currentUser]);
 
   const isOnlineUser = (userId) => {
-    return onlineUsers.includes(userId);
+    const id = String(userId);
+    return onlineUsers.some((u) => (u && typeof u === 'object' ? String(u.userId) === id : String(u) === id));
   };
 
   const handleDeletePost = async (postId) => {
-    if (window.confirm('Are you sure you want to delete this hospital post? This action cannot be undone.')) {
-      try {
-        const res = await fetch(`/api/post/delete/${postId}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setHospitalPosts(hospitalPosts.filter(post => post._id !== postId));
-        } else {
-          alert(data.message);
-        }
-      } catch (error) {
-        console.log(error.message);
+    try {
+      const res = await fetch(`/api/post/delete/${postId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setHospitalPosts(hospitalPosts.filter(post => post._id !== postId));
+        setShowDeleteModal(false);
+        setPostToAction(null);
+      } else {
+        alert(data.message);
       }
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
   const handleApprove = async (postId) => {
-    if (window.confirm('Approve this hospital post?')) {
-      try {
-        const res = await fetch(`/api/post/approve/${postId}`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setHospitalPosts(hospitalPosts.map(post => 
-            post._id === postId ? { ...post, approved: true } : post
-          ));
-        } else {
-          alert(data.message || 'Failed to approve post');
-        }
-      } catch (error) {
-        console.log('Error approving post:', error.message);
-        alert('Failed to approve post');
+    try {
+      const res = await fetch(`/api/post/approve/${postId}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setHospitalPosts(hospitalPosts.map(post => 
+          post._id === postId ? { ...post, approved: true } : post
+        ));
+        setShowApproveModal(false);
+        setPostToAction(null);
+      } else {
+        alert(data.message || 'Failed to approve post');
       }
+    } catch (error) {
+      console.log('Error approving post:', error.message);
+      alert('Failed to approve post');
     }
   };
 
   const handleCallHospital = (post) => {
-    // Implement call functionality
-    alert(`Calling ${post.departmentName}...`);
+    if (startCall && post.userRef) {
+      startCall(post.userRef);
+    } else {
+      alert(`Cannot call ${post.departmentName}. Please try again.`);
+    }
   };
 
   const getStatusColor = (approved) => {
@@ -116,6 +143,18 @@ export default function DashHospital() {
     const matchesStatus = filterStatus === 'all' || status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  // Open approve confirmation modal
+  const openApproveModal = (post) => {
+    setPostToAction(post);
+    setShowApproveModal(true);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (post) => {
+    setPostToAction(post);
+    setShowDeleteModal(true);
+  };
 
   if (loading) {
     return (
@@ -293,6 +332,13 @@ export default function DashHospital() {
                           </Link>
                         )}
                         <button
+                          onClick={() => setSelectedPost(post)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                        >
+                          <FaEye className="w-3 h-3 mr-1" />
+                          View
+                        </button>
+                        <button
                           onClick={() => handleCallHospital(post)}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
                         >
@@ -303,7 +349,7 @@ export default function DashHospital() {
                         {!post.approved && (
                           <>
                             <button
-                              onClick={() => handleApprove(post._id)}
+                              onClick={() => openApproveModal(post)}
                               className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
                               title="Approve Post"
                             >
@@ -313,7 +359,7 @@ export default function DashHospital() {
                           </>
                         )}
                         <button
-                          onClick={() => handleDeletePost(post._id)}
+                          onClick={() => openDeleteModal(post)}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                         >
                           <FaTrash className="w-3 h-3 mr-1" />
@@ -373,12 +419,19 @@ export default function DashHospital() {
               <div className="flex flex-wrap gap-2">
                 {post.approved && (
                   <Link to={`/post/${post._id}`} className="flex-1 min-w-0">
-                    <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-cyan-500 hover:bg-cyan-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
                       <FaEye className="w-3 h-3 mr-2" />
-                      View
+                      View Page
                     </button>
                   </Link>
                 )}
+                <button
+                  onClick={() => setSelectedPost(post)}
+                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                >
+                  <FaEye className="w-3 h-3 mr-2" />
+                  View Details
+                </button>
                 <button
                   onClick={() => handleCallHospital(post)}
                   className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
@@ -390,7 +443,7 @@ export default function DashHospital() {
                 {!post.approved && (
                   <>
                     <button
-                      onClick={() => handleApprove(post._id)}
+                      onClick={() => openApproveModal(post)}
                       className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
                     >
                       <FaCheck className="w-3 h-3 mr-2" />
@@ -399,7 +452,7 @@ export default function DashHospital() {
                   </>
                 )}
                 <button
-                  onClick={() => handleDeletePost(post._id)}
+                  onClick={() => openDeleteModal(post)}
                   className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                 >
                   <FaTrash className="w-3 h-3 mr-2" />
@@ -427,6 +480,92 @@ export default function DashHospital() {
           </div>
         )}
       </div>
+
+      {/* Unapproved Post Modal */}
+      {selectedPost && (
+        <UnapprovedPostModal
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          onApprove={handleApprove}
+          onDelete={handleDeletePost}
+          onCall={handleCallHospital}
+          isOnline={isOnlineUser(selectedPost.userRef)}
+        />
+      )}
+
+      {/* Approve Confirmation Modal */}
+      {showApproveModal && postToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-green-100 rounded-lg mr-3">
+                <FaCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Approve Hospital Post</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to approve <strong>"{postToAction.departmentName}"</strong>? 
+              This will make the hospital post publicly visible.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowApproveModal(false);
+                  setPostToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleApprove(postToAction._id)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+              >
+                Yes, Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && postToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-red-100 rounded-lg mr-3">
+                <FaTrash className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Hospital Post</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>"{postToAction.departmentName}"</strong>? 
+              This action cannot be undone and all associated data will be permanently removed.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setPostToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeletePost(postToAction._id)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

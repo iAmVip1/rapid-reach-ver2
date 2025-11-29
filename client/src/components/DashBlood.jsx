@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { FaPhone, FaTrash, FaEye, FaEdit, FaUser, FaEnvelope, FaBuilding, FaCircle, FaSearch, FaFilter, FaHospital, FaMapMarkerAlt, FaCalendar, FaCheck, FaTimes, FaTint } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import Socket from '../socket/SocketContext';
+import { useCall } from '../socket/CallContext';
+import UnapprovedPostModal from './UnapprovedPostModal';
 
 export default function DashBlood() {
   const { currentUser } = useSelector((state) => state.user);
+  const { startCall } = useCall() || {};
   const [bloodPosts, setBloodPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const hasJoined = useRef(false);
 
   // Fetch blood bank posts (include unapproved for admin review)
   useEffect(() => {
@@ -40,15 +46,30 @@ export default function DashBlood() {
     fetchBloodPosts();
   }, []);
 
-  // Mock online users for demo (replace with real socket implementation)
+  // Subscribe to socket events for online status
   useEffect(() => {
-    // Simulate online users - replace with actual socket implementation
-    const mockOnlineUsers = bloodPosts.slice(0, 2).map(post => post.userRef);
-    setOnlineUsers(mockOnlineUsers);
-  }, [bloodPosts]);
+    const socket = Socket.getSocket();
+
+    if (currentUser && socket && !hasJoined.current) {
+      socket.emit('join', { id: currentUser._id, name: currentUser.username });
+      hasJoined.current = true;
+    }
+
+    const handleOnlineUsers = (list) => {
+      setOnlineUsers(Array.isArray(list) ? list : []);
+    };
+
+    if (socket) {
+      socket.on('online-users', handleOnlineUsers);
+      return () => {
+        socket.off('online-users', handleOnlineUsers);
+      };
+    }
+  }, [currentUser]);
 
   const isOnlineUser = (userId) => {
-    return onlineUsers.includes(userId);
+    const id = String(userId);
+    return onlineUsers.some((u) => (u && typeof u === 'object' ? String(u.userId) === id : String(u) === id));
   };
 
   const handleDeletePost = async (postId) => {
@@ -92,8 +113,11 @@ export default function DashBlood() {
   };
 
   const handleCallBloodBank = (post) => {
-    // Implement call functionality
-    alert(`Calling ${post.departmentName}...`);
+    if (startCall && post.userRef) {
+      startCall(post.userRef);
+    } else {
+      alert(`Cannot call ${post.departmentName}. Please try again.`);
+    }
   };
 
   const getStatusColor = (approved) => {
@@ -284,14 +308,13 @@ export default function DashBlood() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        {post.approved && (
-                          <Link to={`/post/${post._id}`}>
-                            <button className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                              <FaEye className="w-3 h-3 mr-1" />
-                              View
-                            </button>
-                          </Link>
-                        )}
+                        <button
+                          onClick={() => setSelectedPost(post)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                        >
+                          <FaEye className="w-3 h-3 mr-1" />
+                          View
+                        </button>
                         <button
                           onClick={() => handleCallBloodBank(post)}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
@@ -371,14 +394,13 @@ export default function DashBlood() {
               </div>
               
               <div className="flex flex-wrap gap-2">
-                {post.approved && (
-                  <Link to={`/post/${post._id}`} className="flex-1 min-w-0">
-                    <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                      <FaEye className="w-3 h-3 mr-2" />
-                      View
-                    </button>
-                  </Link>
-                )}
+                <button
+                  onClick={() => setSelectedPost(post)}
+                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                >
+                  <FaEye className="w-3 h-3 mr-2" />
+                  View 
+                </button>
                 <button
                   onClick={() => handleCallBloodBank(post)}
                   className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
@@ -427,6 +449,18 @@ export default function DashBlood() {
           </div>
         )}
       </div>
+
+      {/* Unapproved Post Modal */}
+      {selectedPost && (
+        <UnapprovedPostModal
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          onApprove={handleApprove}
+          onDelete={handleDeletePost}
+          onCall={handleCallBloodBank}
+          isOnline={isOnlineUser(selectedPost.userRef)}
+        />
+      )}
     </div>
   );
 }
