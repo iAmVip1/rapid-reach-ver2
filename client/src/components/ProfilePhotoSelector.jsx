@@ -64,16 +64,16 @@ const ProfilePhotoSelector = ({image, setImage}) => {
           <div className="relative">
             <img 
               src={previewUrl}
-              alt="profile pic"
+             alt="profile pic"
               className='w-20 h-20 rounded-full object-cover border-4 border-gray-300'
-            />
-            <button
+              />
+              <button
               type='button'
               className='w-8 h-8 flex items-center justify-center bg-red-500 text-white rounded-full absolute -bottom-1 -right-1 hover:bg-red-600 transition-colors'
               onClick={handleRemoveImage}
-            >
-              <LuTrash />
-            </button>
+              >
+                <LuTrash />
+              </button>
           </div>
         )}
     </div>

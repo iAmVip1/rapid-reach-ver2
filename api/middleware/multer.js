@@ -37,7 +37,7 @@ const resolveFolderForUpload = (req, file) => {
   if (base.includes("/post")) {
     if (file.fieldname === "documents") {
       return path.join(rootUploadDir, "posts", "documents");
-    }
+}
     return path.join(rootUploadDir, "posts", "images");
   }
   if (base.includes("/drive")) {

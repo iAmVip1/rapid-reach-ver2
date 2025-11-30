@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { FaPhone, FaTrash, FaEye, FaCircle, FaSearch, FaFilter, FaAmbulance, FaMapMarkerAlt, FaCalendar, FaCheck, FaCar, FaUser, FaEnvelope } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import Socket from '../socket/SocketContext';
+import { useCall } from '../socket/CallContext';
+import UnapprovedPostModal from './UnapprovedPostModal';
 
 export default function DashAmbulance() {
   const { currentUser } = useSelector((state) => state.user);
+  const { startCall } = useCall() || {};
   const [ambulanceDrives, setAmbulanceDrives] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedDrive, setSelectedDrive] = useState(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [driveToAction, setDriveToAction] = useState(null);
+  const hasJoined = useRef(false);
 
   // Fetch ambulance drives (include unapproved for admin review)
   useEffect(() => {
@@ -39,59 +48,91 @@ export default function DashAmbulance() {
     fetchAmbulanceDrives();
   }, []);
 
-  // Mock online users for demo (replace with real socket implementation)
+  // Subscribe to socket events for online status
   useEffect(() => {
-    const mockOnlineUsers = ambulanceDrives.slice(0, 2).map(drive => drive.userRef);
-    setOnlineUsers(mockOnlineUsers);
-  }, [ambulanceDrives]);
+    const socket = Socket.getSocket();
+
+    if (currentUser && socket && !hasJoined.current) {
+      socket.emit('join', { id: currentUser._id, name: currentUser.username });
+      hasJoined.current = true;
+    }
+
+    const handleOnlineUsers = (list) => {
+      setOnlineUsers(Array.isArray(list) ? list : []);
+    };
+
+    if (socket) {
+      socket.on('online-users', handleOnlineUsers);
+      return () => {
+        socket.off('online-users', handleOnlineUsers);
+      };
+    }
+  }, [currentUser]);
 
   const isOnlineUser = (userId) => {
-    return onlineUsers.includes(userId);
+    const id = String(userId);
+    return onlineUsers.some((u) => (u && typeof u === 'object' ? String(u.userId) === id : String(u) === id));
   };
 
   const handleDeleteDrive = async (driveId) => {
-    if (window.confirm('Are you sure you want to delete this ambulance drive? This action cannot be undone.')) {
-      try {
-        const res = await fetch(`/api/drive/delete/${driveId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setAmbulanceDrives(ambulanceDrives.filter(drive => drive._id !== driveId));
-        } else {
-          alert(data.message);
-        }
-      } catch (error) {
-        console.log(error.message);
+    try {
+      const res = await fetch(`/api/drive/delete/${driveId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAmbulanceDrives(ambulanceDrives.filter(drive => drive._id !== driveId));
+        setShowDeleteModal(false);
+        setDriveToAction(null);
+      } else {
+        alert(data.message);
       }
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
   const handleApprove = async (driveId) => {
-    if (window.confirm('Approve this ambulance drive?')) {
-      try {
-        const res = await fetch(`/api/drive/approve/${driveId}`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setAmbulanceDrives(ambulanceDrives.map(drive => 
-            drive._id === driveId ? { ...drive, approved: true } : drive
-          ));
-        } else {
-          alert(data.message || 'Failed to approve drive');
-        }
-      } catch (error) {
-        console.log('Error approving drive:', error.message);
-        alert('Failed to approve drive');
+    try {
+      const res = await fetch(`/api/drive/approve/${driveId}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAmbulanceDrives(ambulanceDrives.map(drive => 
+          drive._id === driveId ? { ...drive, approved: true } : drive
+        ));
+        setShowApproveModal(false);
+        setDriveToAction(null);
+      } else {
+        alert(data.message || 'Failed to approve drive');
       }
+    } catch (error) {
+      console.log('Error approving drive:', error.message);
+      alert('Failed to approve drive');
     }
   };
 
   const handleCallAmbulance = (drive) => {
-    alert(`Calling ${drive.firstName} ${drive.lastName}...`);
+    if (startCall && drive.userRef) {
+      startCall(drive.userRef);
+    } else {
+      alert(`Cannot call ${drive.firstName} ${drive.lastName}. Please try again.`);
+    }
+  };
+
+  // Open approve confirmation modal
+  const openApproveModal = (drive) => {
+    setDriveToAction(drive);
+    setShowApproveModal(true);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (drive) => {
+    setDriveToAction(drive);
+    setShowDeleteModal(true);
   };
 
   const getStatusColor = (approved) => {
@@ -284,24 +325,23 @@ export default function DashAmbulance() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
-                        {drive.approved && (
-                          <Link to={`/drive/${drive._id}`}>
-                            <button className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                              <FaEye className="w-3 h-3 mr-1" />
-                              View
-                            </button>
-                          </Link>
-                        )}
+                        <button
+                          onClick={() => setSelectedDrive(drive)}
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                        >
+                          <FaEye className="w-3 h-3 mr-1" />
+                          View
+                        </button>
                         <button
                           onClick={() => handleCallAmbulance(drive)}
-                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                          className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
                         >
                           <FaPhone className="w-3 h-3 mr-1" />
                           Call
                         </button>
                         {!drive.approved && (
                           <button
-                            onClick={() => handleApprove(drive._id)}
+                            onClick={() => openApproveModal(drive)}
                             className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
                             title="Approve Drive"
                           >
@@ -310,7 +350,7 @@ export default function DashAmbulance() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleDeleteDrive(drive._id)}
+                          onClick={() => openDeleteModal(drive)}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                         >
                           <FaTrash className="w-3 h-3 mr-1" />
@@ -372,24 +412,23 @@ export default function DashAmbulance() {
               </div>
               
               <div className="flex flex-wrap gap-2">
-                {drive.approved && (
-                  <Link to={`/vechicle/${drive._id}`} className="flex-1 min-w-0">
-                    <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                      <FaEye className="w-3 h-3 mr-2" />
-                      View
-                    </button>
-                  </Link>
-                )}
+                <button
+                  onClick={() => setSelectedDrive(drive)}
+                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                >
+                  <FaEye className="w-3 h-3 mr-2" />
+                  View
+                </button>
                 <button
                   onClick={() => handleCallAmbulance(drive)}
-                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all duration-200"
                 >
                   <FaPhone className="w-3 h-3 mr-2" />
                   Call
                 </button>
                 {!drive.approved && (
                   <button
-                    onClick={() => handleApprove(drive._id)}
+                    onClick={() => openApproveModal(drive)}
                     className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
                   >
                     <FaCheck className="w-3 h-3 mr-2" />
@@ -397,7 +436,7 @@ export default function DashAmbulance() {
                   </button>
                 )}
                 <button
-                  onClick={() => handleDeleteDrive(drive._id)}
+                  onClick={() => openDeleteModal(drive)}
                   className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                 >
                   <FaTrash className="w-3 h-3 mr-2" />
@@ -419,6 +458,94 @@ export default function DashAmbulance() {
           </div>
         )}
       </div>
+
+      {/* Unapproved Drive Modal */}
+      {selectedDrive && (
+        <UnapprovedPostModal
+          isOpen={true}
+          onClose={() => setSelectedDrive(null)}
+          post={selectedDrive}
+          onApprove={handleApprove}
+          onDelete={handleDeleteDrive}
+          onCall={handleCallAmbulance}
+          isOnline={isOnlineUser(selectedDrive.userRef)}
+          type="drive"
+        />
+      )}
+
+      {/* Approve Confirmation Modal */}
+      {showApproveModal && driveToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-green-100 rounded-lg mr-3">
+                <FaCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Approve Ambulance Drive</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to approve <strong>"{driveToAction.firstName} {driveToAction.lastName}"</strong>? 
+              This will make the ambulance drive publicly visible.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowApproveModal(false);
+                  setDriveToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleApprove(driveToAction._id)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+              >
+                Yes, Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && driveToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-red-100 rounded-lg mr-3">
+                <FaTrash className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Ambulance Drive</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>"{driveToAction.firstName} {driveToAction.lastName}"</strong>? 
+              This action cannot be undone and all associated data will be permanently removed.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDriveToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteDrive(driveToAction._id)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

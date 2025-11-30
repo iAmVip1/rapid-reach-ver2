@@ -15,6 +15,9 @@ export default function DashFire() {
   const [filterStatus, setFilterStatus] = useState('all');
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [postToAction, setPostToAction] = useState(null);
   const hasJoined = useRef(false);
 
   // Fetch fire department posts (include unapproved for admin review)
@@ -73,43 +76,55 @@ export default function DashFire() {
   };
 
   const handleDeletePost = async (postId) => {
-    if (window.confirm('Are you sure you want to delete this fire department post? This action cannot be undone.')) {
-      try {
-        const res = await fetch(`/api/post/delete/${postId}`, {
-          method: 'DELETE',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setFirePosts(firePosts.filter(post => post._id !== postId));
-        } else {
-          alert(data.message);
-        }
-      } catch (error) {
-        console.log(error.message);
+    try {
+      const res = await fetch(`/api/post/delete/${postId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFirePosts(firePosts.filter(post => post._id !== postId));
+        setShowDeleteModal(false);
+        setPostToAction(null);
+      } else {
+        alert(data.message);
       }
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
   const handleApprove = async (postId) => {
-    if (window.confirm('Approve this fire department post?')) {
-      try {
-        const res = await fetch(`/api/post/approve/${postId}`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setFirePosts(firePosts.map(post => 
-            post._id === postId ? { ...post, approved: true } : post
-          ));
-        } else {
-          alert(data.message || 'Failed to approve post');
-        }
-      } catch (error) {
-        console.log('Error approving post:', error.message);
-        alert('Failed to approve post');
+    try {
+      const res = await fetch(`/api/post/approve/${postId}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFirePosts(firePosts.map(post => 
+          post._id === postId ? { ...post, approved: true } : post
+        ));
+        setShowApproveModal(false);
+        setPostToAction(null);
+      } else {
+        alert(data.message || 'Failed to approve post');
       }
+    } catch (error) {
+      console.log('Error approving post:', error.message);
+      alert('Failed to approve post');
     }
+  };
+
+  // Open approve confirmation modal
+  const openApproveModal = (post) => {
+    setPostToAction(post);
+    setShowApproveModal(true);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (post) => {
+    setPostToAction(post);
+    setShowDeleteModal(true);
   };
 
   const handleCallFireDepartment = (post) => {
@@ -326,7 +341,7 @@ export default function DashFire() {
                         {!post.approved && (
                           <>
                             <button
-                              onClick={() => handleApprove(post._id)}
+                              onClick={() => openApproveModal(post)}
                               className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
                               title="Approve Post"
                             >
@@ -336,7 +351,7 @@ export default function DashFire() {
                           </>
                         )}
                         <button
-                          onClick={() => handleDeletePost(post._id)}
+                          onClick={() => openDeleteModal(post)}
                           className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                         >
                           <FaTrash className="w-3 h-3 mr-1" />
@@ -408,25 +423,25 @@ export default function DashFire() {
                   <FaPhone className="w-3 h-3 mr-2" />
                   Call
                 </button>
-                {/* Approve button - Only show for pending posts */}
-                {!post.approved && (
-                  <>
+                    {/* Approve button - Only show for pending posts */}
+                    {!post.approved && (
+                      <>
+                        <button
+                          onClick={() => openApproveModal(post)}
+                          className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                        >
+                          <FaCheck className="w-3 h-3 mr-2" />
+                          Approve
+                        </button>
+                      </>
+                    )}
                     <button
-                      onClick={() => handleApprove(post._id)}
-                      className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                      onClick={() => openDeleteModal(post)}
+                      className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
                     >
-                      <FaCheck className="w-3 h-3 mr-2" />
-                      Approve
+                      <FaTrash className="w-3 h-3 mr-2" />
+                      Delete
                     </button>
-                  </>
-                )}
-                <button
-                  onClick={() => handleDeletePost(post._id)}
-                  className="flex-1 min-w-0 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
-                >
-                  <FaTrash className="w-3 h-3 mr-2" />
-                  Delete
-                </button>
               </div>
             </div>
           ))}
@@ -453,13 +468,89 @@ export default function DashFire() {
       {/* Unapproved Post Modal */}
       {selectedPost && (
         <UnapprovedPostModal
-          post={selectedPost}
+          isOpen={true}
           onClose={() => setSelectedPost(null)}
+          post={selectedPost}
           onApprove={handleApprove}
           onDelete={handleDeletePost}
           onCall={handleCallFireDepartment}
           isOnline={isOnlineUser(selectedPost.userRef)}
+          type="post"
         />
+      )}
+
+      {/* Approve Confirmation Modal */}
+      {showApproveModal && postToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-green-100 rounded-lg mr-3">
+                <FaCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Approve Fire Department Post</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to approve <strong>"{postToAction.departmentName}"</strong>? 
+              This will make the fire department post publicly visible.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowApproveModal(false);
+                  setPostToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleApprove(postToAction._id)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+              >
+                Yes, Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && postToAction && (
+        <div className="fixed inset-0 backdrop-blur-md bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="p-2 bg-red-100 rounded-lg mr-3">
+                <FaTrash className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Delete Fire Department Post</h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <strong>"{postToAction.departmentName}"</strong>? 
+              This action cannot be undone and all associated data will be permanently removed.
+            </p>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setPostToAction(null);
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeletePost(postToAction._id)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

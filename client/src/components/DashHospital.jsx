@@ -49,7 +49,6 @@ export default function DashHospital() {
     fetchHospitalPosts();
   }, []);
 
-  // Subscribe to socket events for online status
   useEffect(() => {
     const socket = Socket.getSocket();
 

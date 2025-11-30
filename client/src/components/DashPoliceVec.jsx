@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { FaPhone, FaTrash, FaEye, FaCircle, FaSearch, FaFilter, FaShieldAlt, FaMapMarkerAlt, FaCalendar, FaCheck, FaCar, FaUser, FaEnvelope } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
+import Socket from '../socket/SocketContext';
+import { useCall } from '../socket/CallContext';
+import UnapprovedPostModal from './UnapprovedPostModal';
 
 export default function DashPoliceVec() {
   const { currentUser } = useSelector((state) => state.user);
+  const { startCall } = useCall() || {};
   const [policeDrives, setPoliceDrives] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [selectedDrive, setSelectedDrive] = useState(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [driveToAction, setDriveToAction] = useState(null);
+  const hasJoined = useRef(false);
 
   // Fetch police vehicle drives (include unapproved for admin review)
   useEffect(() => {
@@ -39,59 +48,91 @@ export default function DashPoliceVec() {
     fetchPoliceDrives();
   }, []);
 
-  // Mock online users for demo (replace with real socket implementation)
+  // Subscribe to socket events for online status
   useEffect(() => {
-    const mockOnlineUsers = policeDrives.slice(0, 2).map(drive => drive.userRef);
-    setOnlineUsers(mockOnlineUsers);
-  }, [policeDrives]);
+    const socket = Socket.getSocket();
+
+    if (currentUser && socket && !hasJoined.current) {
+      socket.emit('join', { id: currentUser._id, name: currentUser.username });
+      hasJoined.current = true;
+    }
+
+    const handleOnlineUsers = (list) => {
+      setOnlineUsers(Array.isArray(list) ? list : []);
+    };
+
+    if (socket) {
+      socket.on('online-users', handleOnlineUsers);
+      return () => {
+        socket.off('online-users', handleOnlineUsers);
+      };
+    }
+  }, [currentUser]);
 
   const isOnlineUser = (userId) => {
-    return onlineUsers.includes(userId);
+    const id = String(userId);
+    return onlineUsers.some((u) => (u && typeof u === 'object' ? String(u.userId) === id : String(u) === id));
   };
 
   const handleDeleteDrive = async (driveId) => {
-    if (window.confirm('Are you sure you want to delete this police vehicle drive? This action cannot be undone.')) {
-      try {
-        const res = await fetch(`/api/drive/delete/${driveId}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setPoliceDrives(policeDrives.filter(drive => drive._id !== driveId));
-        } else {
-          alert(data.message);
-        }
-      } catch (error) {
-        console.log(error.message);
+    try {
+      const res = await fetch(`/api/drive/delete/${driveId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPoliceDrives(policeDrives.filter(drive => drive._id !== driveId));
+        setShowDeleteModal(false);
+        setDriveToAction(null);
+      } else {
+        alert(data.message);
       }
+    } catch (error) {
+      console.log(error.message);
     }
   };
 
   const handleApprove = async (driveId) => {
-    if (window.confirm('Approve this police vehicle drive?')) {
-      try {
-        const res = await fetch(`/api/drive/approve/${driveId}`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setPoliceDrives(policeDrives.map(drive => 
-            drive._id === driveId ? { ...drive, approved: true } : drive
-          ));
-        } else {
-          alert(data.message || 'Failed to approve drive');
-        }
-      } catch (error) {
-        console.log('Error approving drive:', error.message);
-        alert('Failed to approve drive');
+    try {
+      const res = await fetch(`/api/drive/approve/${driveId}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPoliceDrives(policeDrives.map(drive => 
+          drive._id === driveId ? { ...drive, approved: true } : drive
+        ));
+        setShowApproveModal(false);
+        setDriveToAction(null);
+      } else {
+        alert(data.message || 'Failed to approve drive');
       }
+    } catch (error) {
+      console.log('Error approving drive:', error.message);
+      alert('Failed to approve drive');
     }
   };
 
   const handleCallPolice = (drive) => {
-    alert(`Calling ${drive.firstName} ${drive.lastName}...`);
+    if (startCall && drive.userRef) {
+      startCall(drive.userRef);
+    } else {
+      alert(`Cannot call ${drive.firstName} ${drive.lastName}. Please try again.`);
+    }
+  };
+
+  // Open approve confirmation modal
+  const openApproveModal = (drive) => {
+    setDriveToAction(drive);
+    setShowApproveModal(true);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (drive) => {
+    setDriveToAction(drive);
+    setShowDeleteModal(true);
   };
 
   const getStatusColor = (approved) => {
